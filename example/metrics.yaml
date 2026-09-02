@@ -1,0 +1,11 @@
+revenue:
+  table: orders
+  expression: sum(amount)
+  where: status in ('paid', 'fulfilled')
+  date_column: ordered_at
+
+orders:
+  table: orders
+  expression: count(distinct order_id)
+  where: status in ('paid', 'fulfilled')
+  date_column: ordered_at

@@ -1,0 +1,25 @@
+[project]
+name = "recount"
+version = "0.1.0"
+description = "An MCP server that never hands the model a number without the checks."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "duckdb>=1.1",
+  "mcp>=2",
+  "pyyaml>=6",
+]
+
+[project.scripts]
+recount = "recount.server:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["recount*"]
