@@ -24,7 +24,7 @@ Warnings:
 ## Install
 
 ```bash
-pip install git+https://github.com/levi09750/recount
+pip install git+https://github.com/manisha-subedi/recount
 ```
 
 Point it at a folder of CSV or Parquet files. Each file becomes a table.
