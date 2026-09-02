@@ -1,11 +1,10 @@
 # recount
 
-An MCP server that never hands the model a number without the checks.
+An MCP server for your data. When Claude asks for a number, recount runs
+the SQL and also checks the tables. The answer comes back with warnings, if
+there are any.
 
-Most database tools for AI run the SQL and trust the answer. If a file was
-loaded twice, the model reports double the revenue with full confidence.
-`recount` runs the same SQL, then checks every table the query touched, and
-returns the number together with the warnings.
+Example. Ask "what was revenue in August?" on the example data:
 
 ```
 revenue = sum(amount) from orders where status in ('paid', 'fulfilled')
@@ -21,14 +20,17 @@ Warnings:
 - orders: 2392 rows in 2026-08, the usual month has about 1219. Loaded twice?
 ```
 
+The August file was loaded twice. Without the checks, the model says 90,050
+and moves on.
+
 ## Install
 
 ```bash
 pip install git+https://github.com/manisha-subedi/recount
 ```
 
-Point it at a folder of CSV or Parquet files. Each file becomes a table.
-A `.duckdb` file works too.
+Point it at a folder with CSV or Parquet files. Each file becomes a table.
+A `.duckdb` file also works.
 
 Claude Code:
 
@@ -49,36 +51,34 @@ Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-The metrics file is optional. Try it on the example first:
+The metrics file is optional. To try the example:
 
 ```bash
 claude mcp add recount -- recount ./example ./example/metrics.yaml
 ```
 
-Then ask: "What was revenue in August?"
+Then ask Claude: "What was revenue in August?"
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
 | `list_tables` | Tables and their columns. |
-| `profile_table` | Row count, and for each column the type, how many empty, how many distinct, a few examples. |
-| `query` | Runs a select. The result comes back with the checks for every table it used. |
+| `profile_table` | Row count. For each column: type, how many empty, how many distinct, some examples. |
+| `query` | Runs a select query. Returns the rows and the warnings for every table in the query. |
 | `check` | Runs the checks on one table. |
-| `metric` | A metric from `metrics.yaml`, by month. One definition, so "revenue" always means one thing. |
+| `metric` | A metric from `metrics.yaml`, by month. |
 
-## The checks
+## Checks
 
-Four checks. Each is one query. Each catches something a type test does not.
+- Duplicates. Number of rows against number of distinct ids.
+- Month jump. Newest month against the usual month. Double means loaded twice, half means data is missing.
+- Old data. Newest date is more than 40 days ago.
+- Empty columns. More than half of the values are empty.
 
-- **Duplicates.** Rows against distinct ids. Equal in a clean table.
-- **A month that jumped.** The newest month against the usual month. Double means loaded twice, half means missing data.
-- **Stale data.** The newest date is more than 40 days old.
-- **Empty columns.** A column that is mostly null.
-
-`recount` guesses the id column (`id`, or the first column that ends in `_id`)
-and the date column (the first date or timestamp). You can pass both to
-`check` if the guess is wrong.
+recount guesses the id column (`id`, or the first column that ends with
+`_id`) and the date column (the first date or timestamp column). If the
+guess is wrong, pass them to `check`.
 
 ## Metrics
 
@@ -90,13 +90,13 @@ revenue:
   date_column: ordered_at
 ```
 
-With this file, the model asks for `revenue` and gets one definition every
-time, instead of writing its own.
+With this file, "revenue" always means the same thing. The model does not
+write its own definition.
 
-## What it does not do
+## Notes
 
-It never changes data. Only select queries run. When it finds a duplicate, it
-tells you. Fixing the load is a job for a person.
+Only select queries run. recount never changes data. When it finds a
+problem, it tells you. Fixing the data is your job.
 
 ## Development
 
@@ -106,5 +106,5 @@ python example/make_data.py
 pytest
 ```
 
-The example is a small shop, June to August 2026, with the August file
-loaded twice. That is the fault every check should catch.
+The example data is a small shop, June to August 2026. The August file is
+loaded twice on purpose.
