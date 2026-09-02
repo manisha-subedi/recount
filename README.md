@@ -1,110 +1,71 @@
-# recount
+# A warehouse on a laptop
 
-An MCP server for your data. When Claude asks for a number, recount runs
-the SQL and also checks the tables. The answer comes back with warnings, if
-there are any.
+Load monthly CSV files into DuckDB, clean them with dbt, and get tables ready
+for a report. If you load the same file twice, the second time is skipped.
 
-Example. Ask "what was revenue in August?" on the example data:
+The data is real. Chicago's bike share (Divvy) publishes one zip file per
+month. Three months is about 2.3 million rides. Loading takes about 25
+seconds.
 
 ```
-revenue = sum(amount) from orders where status in ('paid', 'fulfilled')
+$ python load.py 202605 202606 202607
+202605-divvy-tripdata.zip: loaded 653704 rows
+202606-divvy-tripdata.zip: loaded 762550 rows
+202607-divvy-tripdata.zip: loaded 869051 rows
 
-month    revenue
--------  -------
-2026-06  46665
-2026-07  47665
-2026-08  90050
-
-Warnings:
-- orders: 4811 rows but only 3615 distinct order_id. Some rows are in twice.
-- orders: 2392 rows in 2026-08, the usual month has about 1219. Loaded twice?
+$ python load.py 202606
+202606-divvy-tripdata.zip: already loaded, skipped
 ```
 
-The August file was loaded twice. Without the checks, the model says 90,050
-and moves on.
-
-## Install
+## How to run
 
 ```bash
-pip install git+https://github.com/manisha-subedi/recount
+uv venv && uv pip install -e ".[dev]"
+python load.py 202605 202606 202607
+dbt build --project-dir warehouse --profiles-dir warehouse
+python chart.py
 ```
 
-Point it at a folder with CSV or Parquet files. Each file becomes a table.
-A `.duckdb` file also works.
+After this you have:
 
-Claude Code:
+- `warehouse.duckdb`, the database
+- `rides.svg`, a chart of rides per day
+
+Open the database with DBeaver, Power BI, or any tool that can read DuckDB.
+
+![Rides per day, members and casual riders, May to July 2026](rides.svg)
+
+## Files
+
+`load.py`
+Downloads one month, saves the file hash, and loads the rows into
+`raw_trips`. If the hash is already in the `loads` table, the file is
+skipped. All raw columns are text. Types are set in the next step.
+
+`warehouse/models/staging/stg_trips.sql`
+Sets the types, keeps one row per `ride_id`, and removes rides that end
+before they start.
+
+`warehouse/models/marts/`
+`mart_daily_rides`: rides per day, members and casual riders.
+`mart_station_month`: rides per station per month.
+
+`warehouse/tests/`
+`file_size.sql`: a file with double or half the usual rows fails the build.
+`no_future_rides.sql`: no ride starts in the future.
+The column tests are in `schema.yml`: `ride_id` is unique and not null,
+`member_casual` is `member` or `casual`.
+
+## Why the file hash
+
+Loading a file twice happens when someone reruns a job. All the numbers
+double, and the normal tests do not see it. Saving the file hash with each
+load stops it.
+
+## Tests
 
 ```bash
-claude mcp add recount -- recount /path/to/data /path/to/metrics.yaml
-```
-
-Claude Desktop, in `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "recount": {
-      "command": "recount",
-      "args": ["/path/to/data", "/path/to/metrics.yaml"]
-    }
-  }
-}
-```
-
-The metrics file is optional. To try the example:
-
-```bash
-claude mcp add recount -- recount ./example ./example/metrics.yaml
-```
-
-Then ask Claude: "What was revenue in August?"
-
-## Tools
-
-| Tool | What it does |
-|---|---|
-| `list_tables` | Tables and their columns. |
-| `profile_table` | Row count. For each column: type, how many empty, how many distinct, some examples. |
-| `query` | Runs a select query. Returns the rows and the warnings for every table in the query. |
-| `check` | Runs the checks on one table. |
-| `metric` | A metric from `metrics.yaml`, by month. |
-
-## Checks
-
-- Duplicates. Number of rows against number of distinct ids.
-- Month jump. Newest month against the usual month. Double means loaded twice, half means data is missing.
-- Old data. Newest date is more than 40 days ago.
-- Empty columns. More than half of the values are empty.
-
-recount guesses the id column (`id`, or the first column that ends with
-`_id`) and the date column (the first date or timestamp column). If the
-guess is wrong, pass them to `check`.
-
-## Metrics
-
-```yaml
-revenue:
-  table: orders
-  expression: sum(amount)
-  where: status in ('paid', 'fulfilled')
-  date_column: ordered_at
-```
-
-With this file, "revenue" always means the same thing. The model does not
-write its own definition.
-
-## Notes
-
-Only select queries run. recount never changes data. When it finds a
-problem, it tells you. Fixing the data is your job.
-
-## Development
-
-```bash
-uv venv && uv pip install -e ".[test]"
-python example/make_data.py
 pytest
 ```
 
-The example data is a small shop, June to August 2026. The August file is
-loaded twice on purpose.
+Loads a small zip file twice and checks that the second load is skipped.
