@@ -14,7 +14,7 @@ metrics: dict = {}
 
 
 def warnings_for(sql: str) -> list[str]:
-    """Every table named in the sql gets checked. The number never travels alone."""
+    """Check every table named in the sql."""
     found = []
     for table in store.tables(con):
         if re.search(rf"\b{re.escape(table)}\b", sql, re.IGNORECASE):
@@ -40,7 +40,7 @@ def list_tables() -> str:
 
 @mcp.tool()
 def profile_table(table: str) -> str:
-    """Row count, and for each column: type, how many empty, how many distinct, a few example values."""
+    """Row count. For each column: type, how many empty, how many distinct, some examples."""
     if table not in store.tables(con):
         return f"No table called {table}."
     total = con.execute(f'select count(*) from "{table}"').fetchone()[0]
@@ -61,7 +61,7 @@ def profile_table(table: str) -> str:
 
 @mcp.tool()
 def query(sql: str) -> str:
-    """Run a read-only SQL query. The result comes back with the checks for every table it used."""
+    """Run a select query. Returns the rows and the warnings for every table in the query."""
     if not sql.strip().lower().startswith(("select", "with")):
         return "Only select queries. recount does not change data."
     try:
@@ -84,7 +84,7 @@ def check(table: str, key: str = "", date_column: str = "") -> str:
 
 @mcp.tool()
 def metric(name: str) -> str:
-    """A metric from metrics.yaml, by month. One definition, so 'revenue' always means the same thing."""
+    """A metric from metrics.yaml, by month."""
     if name not in metrics:
         known = ", ".join(metrics) or "none"
         return f"No metric called {name}. Known metrics: {known}."

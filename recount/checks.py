@@ -13,7 +13,7 @@ def duplicates(con, table: str, key: str) -> str | None:
 
 
 def period_jump(con, table: str, date_col: str) -> str | None:
-    """The newest month should look like the months before it. Double or half is suspicious."""
+    """Newest month against the usual month."""
     rows = con.execute(
         f'select date_trunc(\'month\', "{date_col}") as m, count(*) from "{table}" '
         "group by 1 order by 1"

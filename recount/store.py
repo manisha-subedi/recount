@@ -49,7 +49,7 @@ def guess_date(con, table: str) -> str | None:
 
 
 def as_text(cols: list[str], rows: list[tuple], limit: int = 50) -> str:
-    """Rows as a small aligned text table. Easy for a model to read, easy for a person too."""
+    """Rows as an aligned text table."""
     shown = rows[:limit]
     cells = [[str(v) for v in r] for r in shown]
     widths = [max(len(c), *(len(r[i]) for r in cells)) if cells else len(c) for i, c in enumerate(cols)]

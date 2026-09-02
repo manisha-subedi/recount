@@ -1,7 +1,7 @@
 [project]
 name = "recount"
 version = "0.1.0"
-description = "An MCP server that never hands the model a number without the checks."
+description = "An MCP server for your data. Returns numbers with warnings."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
