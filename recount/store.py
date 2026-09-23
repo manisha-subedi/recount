@@ -53,7 +53,10 @@ def as_text(cols: list[str], rows: list[tuple], limit: int = 50) -> str:
     shown = rows[:limit]
     cells = [[str(v) for v in r] for r in shown]
     widths = [max(len(c), *(len(r[i]) for r in cells)) if cells else len(c) for i, c in enumerate(cols)]
-    line = lambda r: "  ".join(v.ljust(w) for v, w in zip(r, widths))
+
+    def line(values):
+        return "  ".join(v.ljust(w) for v, w in zip(values, widths))
+
     out = [line(cols), line(["-" * w for w in widths]), *[line(r) for r in cells]]
     if len(rows) > limit:
         out.append(f"... {len(rows) - limit} more rows")
