@@ -1,66 +1,67 @@
-# A warehouse on a laptop
+# recount
 
-Load monthly CSV files into DuckDB, clean them with dbt, and get tables ready
-for a report. If you load the same file twice, the second time is skipped.
+recount is an MCP server that lets Claude and other compatible assistants
+query local data with DuckDB. It returns query results with warnings about
+possible data-quality problems.
 
-The data is real. Chicago's bike share (Divvy) publishes one zip file per
-month. Three months is about 2.3 million rides. Loading takes about 25
-seconds.
+It reads CSV and Parquet files from a folder, or opens an existing DuckDB
+database in read-only mode.
 
-```
-$ python load.py 202605 202606 202607
-202605-divvy-tripdata.zip: loaded 653704 rows
-202606-divvy-tripdata.zip: loaded 762550 rows
-202607-divvy-tripdata.zip: loaded 869051 rows
+## What it checks
 
-$ python load.py 202606
-202606-divvy-tripdata.zip: already loaded, skipped
-```
+- Duplicate or missing keys, using row and distinct-key counts.
+- An unusually high or low row count in the latest month.
+- Data older than the configured freshness threshold.
+- Columns with many missing values.
 
-## How to run
+These checks flag issues for investigation. A warning does not establish
+the cause, and passing the checks does not guarantee a correct analysis.
+
+## Install and run
+
+Use Python 3.11 or newer. From the repository folder:
 
 ```bash
-uv venv && uv pip install -e ".[dev]"
-python load.py 202605 202606 202607
-dbt build --project-dir warehouse --profiles-dir warehouse
-python chart.py
+uv venv
+uv pip install -e ".[test]"
+source .venv/bin/activate
+claude mcp add recount -- recount ./example ./example/metrics.yaml
 ```
 
-After this you have:
+The example folder contains order and customer data. Ask the assistant to
+list the tables, inspect the orders, or calculate the revenue metric.
 
-- `warehouse.duckdb`, the database
-- `rides.svg`, a chart of rides per day
+You can also start the server directly:
 
-Open the database with DBeaver, Power BI, or any tool that can read DuckDB.
+```bash
+recount ./example ./example/metrics.yaml
+```
 
-![Rides per day, members and casual riders, May to July 2026](rides.svg)
+## Available tools
 
-## Files
+| Tool | Purpose |
+|---|---|
+| `list_tables` | List tables and columns. |
+| `profile_table` | Show row counts, types, missing values, and sample values. |
+| `query` | Run SQL and return warnings for the referenced tables. |
+| `check` | Check one table, with optional key and date columns. |
+| `metric` | Calculate a named metric by month from a YAML definition. |
 
-`load.py`
-Downloads one month, saves the file hash, and loads the rows into
-`raw_trips`. If the hash is already in the `loads` table, the file is
-skipped. All raw columns are text. Types are set in the next step.
+## Metric definitions
 
-`warehouse/models/staging/stg_trips.sql`
-Sets the types, keeps one row per `ride_id`, and removes rides that end
-before they start.
+The example defines revenue once in `example/metrics.yaml`:
 
-`warehouse/models/marts/`
-`mart_daily_rides`: rides per day, members and casual riders.
-`mart_station_month`: rides per station per month.
+```yaml
+revenue:
+  table: orders
+  expression: sum(amount)
+  where: status in ('paid', 'fulfilled')
+  date_column: ordered_at
+```
 
-`warehouse/tests/`
-`file_size.sql`: a file with double or half the usual rows fails the build.
-`no_future_rides.sql`: no ride starts in the future.
-The column tests are in `schema.yml`: `ride_id` is unique and not null,
-`member_casual` is `member` or `casual`.
-
-## Why the file hash
-
-Loading a file twice happens when someone reruns a job. All the numbers
-double, and the normal tests do not see it. Saving the file hash with each
-load stops it.
+The metric tool returns the definition, monthly values, and any table
+warnings together. It does not silently remove duplicate rows or decide
+how a business metric should be defined.
 
 ## Tests
 
@@ -68,4 +69,4 @@ load stops it.
 pytest
 ```
 
-Loads a small zip file twice and checks that the second load is skipped.
+The tests cover data-quality checks and table discovery.
